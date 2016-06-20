@@ -1,2 +1,4 @@
-# Phosphorus-Plus-2.0
-Working on the next version of Phosphorus Plus
+# Credits
+
+@nathan - Original project
+@bobbybee - The hack
