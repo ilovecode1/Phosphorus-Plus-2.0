@@ -3701,7 +3701,7 @@ P.runtime = (function() {
   (function() {
     'use strict';
 
-    P.Stage.prototype.framerate = 30;
+    P.Stage.prototype.framerate = 60;
 
     P.Stage.prototype.initRuntime = function() {
       this.queue = [];
