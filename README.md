@@ -1,4 +1,1 @@
-# Credits
-
-@nathan - Original project
-@bobbybee - The hack
+[phosphorus.github.io](http://phosphorus.github.io)
