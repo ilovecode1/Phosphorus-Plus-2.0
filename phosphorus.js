@@ -1190,6 +1190,7 @@ var P = (function() {
     this.canvas.height = 360 * this.zoom * SCALE;
 
     context.scale(this.zoom * SCALE, this.zoom * SCALE);
+    context.imageSmoothingEnabled = false;
     this.drawOn(context);
 
     if (this.hidePrompt) {
