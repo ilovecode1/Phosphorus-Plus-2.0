@@ -1382,12 +1382,12 @@ var P = (function() {
     if (this.isPenDown) {
       var context = this.stage.penContext;
       if (this.penSize % 2 > .5 && this.penSize % 2 < 1.5) {
-        ox += .5;
+        ox -= .5;
         oy -= .5;
-        x += .5;
+        x -= .5;
         y -= .5;
       }
-      context.strokeStyle = 'hsl(' + this.penHue + ',' + this.penSaturation + '%,' + (((this.penLightness > 100 ? 200 - this.penLightness : this.penLightness) - 50) * 0.8 + 50) + '%)';
+      context.strokeStyle = this.penCSS || 'hsl(' + this.penHue + ',' + this.penSaturation + '%,' + (this.penLightness > 100 ? 200 - this.penLightness : this.penLightness) + '%)';
       context.lineWidth = this.penSize;
       context.beginPath();
       context.moveTo(240 + ox, 180 - oy);
