@@ -968,6 +968,12 @@ var P = (function() {
         this.updateMouse(e);
         this.releaseMouse();
       }.bind(this));
+      
+      this.root.addEventListener('wheel', function(e) {
+        if (e.ctrlKey || e.deltaY === 0) return;
+        var threads = this.trigger('whenKeyPressed', e.deltaY < 0 ? 38 : 40);
+        if (threads.length) e.preventDefault();
+      }.bind(this));
     }
 
     this.prompter = document.createElement('div');
