@@ -895,7 +895,7 @@ function encodeAudio16bit(soundData, sampleRate, soundBuf) {
   };
 
   Base.prototype.setCostume = function(costume) {
-    if (typeof costume !== 'number') {
+    if (isNaN(parseInt(costume))){
       costume = '' + costume;
       for (var i = 0; i < this.costumes.length; i++) {
         if (this.costumes[i].costumeName === costume) {
