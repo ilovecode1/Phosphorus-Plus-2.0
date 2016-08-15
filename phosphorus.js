@@ -415,16 +415,149 @@ var P = (function() {
 
   IO.decodeAudio = function(ab, cb) {
     if (audioContext) {
-      audioContext.decodeAudioData(ab, function(buffer) {
-        cb(buffer);
-      }, function(err) {
-        console.warn('Failed to load audio');
-        cb(null);
-      });
+          // PF check buffer type is PCM or ADPCM 1st? (ie headers)
+        	var abc = false;
+        	var uInt8Array = new Uint8Array(ab);
+        	if (readBytes(20, 2, uInt8Array) == 17) { // 11 hex (needs to be 1)
+        		console.warn('Processing audio conversion');
+              		// PF it's most likely ADPCM - lets hack the header and correct the buffer
+        		abc = readADPCM(uInt8Array);
+        	}
+                if (abc) { // new
+        	  audioContext.decodeAudioData(abc, function(buffer) {
+                  cb(buffer);
+                  }, function(err) {
+                  console.warn('Failed to convert audio');
+                  cb(null);
+                  });
+        	} else { // old
+        	  audioContext.decodeAudioData(ab, function(buffer) {
+                  cb(buffer);
+                  }, function(err) {
+                  console.warn('Failed to load audio');
+                  cb(null);
+                  });
+        	}
     } else {
       setTimeout(cb);
     }
   };
+  
+  function readBytes(start, length, uInt8Array) {
+	var returnval = 0;
+	for (var j = 0; j < length; j++) {
+		returnval += uInt8Array[start + j] << (8 * j);
+	}
+	return returnval;
+}
+
+function readADPCM(uInt8Array) {
+
+	var blockAlign = readBytes(32, 2, uInt8Array);
+	var samplesPerBlock = (blockAlign - 4);
+	var sampleRate = readBytes(24, 4, uInt8Array);
+
+	var offset = (readBytes(20, 2, uInt8Array) != 1) ? 38 + readBytes(36, 2, uInt8Array) : 36;
+	offset += 8 + readBytes(offset + 4, 4, uInt8Array);
+
+	var soundBytes = readBytes(offset + 4, 4, uInt8Array);
+	var nBlocks = soundBytes / blockAlign;
+	offset += 8;
+
+	var resultStepChange = [-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8];
+	var stepSizes = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767];
+
+	var stepID = 8;
+	var step = 16;
+	var volume = 0;
+	var sdi = 0;
+	var in_s;
+	var s = 0;
+	var byte;
+	var nib;
+	var diff;
+
+	var length = (samplesPerBlock * 4 + 2) * nBlocks;
+	var soundBuf = new ArrayBuffer(length + 32);
+	var soundData = new Uint8Array(soundBuf, 32, length);
+
+	for (var b = 0; b < nBlocks; b++)
+	{
+		in_s = s;
+
+		volume = readBytes(s + offset, 2, uInt8Array)
+		if (volume > 32767) volume = (volume - 65536);
+		stepID = Math.max(0, Math.min(readBytes(s + offset + 2, 1, uInt8Array), 88));
+		s += 4;
+
+		var sample = Math.round(volume);
+		if (sample < 0) sample += 65536; // 2's complement signed
+
+		soundData[sdi++] = sample % 256;
+		soundData[sdi++] = Math.floor(sample / 256);
+
+		for (var as = 0; as < samplesPerBlock; as++)
+		{
+			byte = uInt8Array[s + offset].toString(2);
+			while (byte.length < 8) {
+				byte = "0" + byte;
+			}
+
+			for (var nibble = 0; nibble < 2; nibble++)
+			{
+				nib = parseInt(byte.substr(nibble*4, 4), 2);
+				nib &= 15;
+				step = stepSizes[stepID];
+				diff = step >> 3;
+				if (nib & 1) diff += step >> 2;
+				if (nib & 2) diff += step >> 1;
+				if (nib & 4) diff += step;
+				if (nib & 8) diff = 0 - diff;
+				volume = Math.max(Math.min(32767, volume + diff), -32768)
+				var sample = Math.round(volume);
+				if (sample < 0) sample += 65536; // 2's complement signed
+				soundData[sdi++] = sample % 256;
+				soundData[sdi++] = Math.floor(sample / 256);
+				stepID = Math.max(0, Math.min(stepID + resultStepChange[nib], 88));
+			}
+			s += 1;
+		}
+		s = in_s + blockAlign;
+	}
+
+	return encodeAudio16bit(soundData, sampleRate, soundBuf);
+}
+
+function encodeAudio16bit(soundData, sampleRate, soundBuf) {
+
+	// 16-bit mono WAVE header template
+	var header = "RIFF<##>WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00<##><##>\x02\x00\x10\x00data<##>";
+
+	// Helper to insert a 32-bit little endian int.
+	function insertLong(value) {
+		var bytes = "";
+		for (var i = 0; i < 4; ++i) {
+			bytes += String.fromCharCode(value % 256);
+			value = Math.floor(value / 256);
+		}
+		header = header.replace('<##>', bytes);
+	}
+
+	var n = soundData.length / 2; // as buffer
+	insertLong(36 + n * 2); // ChunkSize
+	insertLong(sampleRate); // SampleRate
+	insertLong(sampleRate * 2); // ByteRate
+	insertLong(n * 2); // Subchunk2Size
+
+	// Output sound data
+	var bytes = new Uint8Array(soundBuf, 0, 40); // 32
+	for (var i = 0; i < header.length; i++)
+	{
+  		bytes[i] = header.charCodeAt(i);
+	}
+	console.log(new Uint8Array(soundBuf));
+	return soundBuf.slice(0);      
+}
 
   IO.loadBase = function(data) {
     data.scripts = data.scripts || [];
