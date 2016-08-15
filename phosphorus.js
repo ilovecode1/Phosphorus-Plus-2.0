@@ -1221,7 +1221,7 @@ function encodeAudio16bit(soundData, sampleRate, soundBuf) {
     this.backdropContext.save();
     var s = this.zoom * SCALE * costume.scale;
     this.backdropContext.scale(s, s);
-    this.backdropContext.drawImage(costume.image, 0, 0);
+    this.backdropContext.drawImage(costume.image, 0, 0, costume.image.width/4, costume.image.height/4);
     this.backdropContext.restore();
   };
 
@@ -2929,6 +2929,7 @@ P.compile = (function() {
       } else if (block[0] === 'putPenUp') {
 
         source += 'S.isPenDown = false;\n';
+        source += 'S.dotPen();\n';
         source += 'S.penState = null;\n';
 
       } else if (block[0] === 'penColor:') {
